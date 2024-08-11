@@ -1,5 +1,6 @@
 import pygame
 import random
+import math
 
 # Initialize Pygame
 pygame.init()
@@ -49,7 +50,6 @@ def generate_maze(width, height):
     while unvisited:
         current = random.choice(unvisited)
         path = [current]
-
         while current not in [
             (x, y) for y in range(height) for x in range(width) if maze[y][x] == 1
         ]:
@@ -100,27 +100,90 @@ def generate_maze(width, height):
     return maze, start, exit_pos
 
 
+# Enemy class
+class Enemy:
+    def __init__(self, x, y):
+        self.pos = [x, y]
+        self.color = BLUE
+        self.move_cooldown = 0
+        self.move_delay = 15
+
+    def move(self, player_pos, maze):
+        if self.move_cooldown > 0:
+            self.move_cooldown -= 1
+            return
+
+        dx = player_pos[0] - self.pos[0]
+        dy = player_pos[1] - self.pos[1]
+        distance = math.sqrt(dx**2 + dy**2)
+
+        if distance != 0:
+            dx, dy = dx / distance, dy / distance
+
+        new_x = int(self.pos[0] + dx)
+        new_y = int(self.pos[1] + dy)
+
+        if (
+            0 <= new_x < GRID_WIDTH
+            and 0 <= new_y < GRID_HEIGHT
+            and maze[new_y][new_x] == 1
+        ):
+            self.pos = [new_x, new_y]
+            self.move_cooldown = self.move_delay
+
+    def knockback(self, player_pos, maze):
+        dx = self.pos[0] - player_pos[0]
+        dy = self.pos[1] - player_pos[1]
+        distance = math.sqrt(dx**2 + dy**2)
+
+        if distance != 0:
+            dx, dy = dx / distance, dy / distance
+
+        for _ in range(2):  # Knock back by 2 squares
+            new_x = int(self.pos[0] + dx)
+            new_y = int(self.pos[1] + dy)
+            if (
+                0 <= new_x < GRID_WIDTH
+                and 0 <= new_y < GRID_HEIGHT
+                and maze[new_y][new_x] == 1
+            ):
+                self.pos = [new_x, new_y]
+            else:
+                break  # Stop if we hit a wall
+
+    def draw(self, screen):
+        pygame.draw.rect(
+            screen,
+            self.color,
+            (self.pos[0] * CELL_SIZE, self.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE),
+        )
+
+
 # Generate the maze
 maze, start, exit_pos = generate_maze(GRID_WIDTH, GRID_HEIGHT)
 
 # Player
 player_pos = list(start)
-has_key = False
+has_shotgun = True
+shotgun_ammo = 5
 
-# Key and exit positions
-key_pos = (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1))
-while key_pos == tuple(player_pos):
-    key_pos = (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1))
+
+# Enemy
+enemy = Enemy(
+    exit_pos[0] - random.randint(1, 5) + random.randint(1, GRID_WIDTH - 1),
+    exit_pos[1] - random.randint(1, 5) + random.randint(1, GRID_HEIGHT - 1),
+)
 
 # Game loop
 running = True
 clock = pygame.time.Clock()
+game_over = False
 
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.KEYDOWN:
+        elif event.type == pygame.KEYDOWN and not game_over:
             dx, dy = 0, 0
             if event.key == pygame.K_UP:
                 dy = -1
@@ -130,24 +193,42 @@ while running:
                 dx = -1
             elif event.key == pygame.K_RIGHT:
                 dx = 1
+            elif event.key == pygame.K_SPACE:
+                if has_shotgun and shotgun_ammo > 0:
+                    shotgun_ammo -= 1
+                    enemy.knockback(player_pos, maze)
+                    print(f"Shotgun fired! Ammo left: {shotgun_ammo}")
 
             new_x, new_y = player_pos[0] + dx, player_pos[1] + dy
-            if (
-                0 <= new_x < GRID_WIDTH
-                and 0 <= new_y < GRID_HEIGHT
-                and maze[new_y][new_x] == 1
-            ):
+            if maze[new_y][new_x] == 1:
                 player_pos = [new_x, new_y]
 
-    # Check if player has collected the key
-    if tuple(player_pos) == key_pos:
-        has_key = True
-        key_pos = (-1, -1)  # Remove the key from the maze
+    if not game_over:
+        # Move enemy
+        enemy.move(player_pos, maze)
 
-    # Check if player has reached the exit with the key
-    if has_key and tuple(player_pos) == exit_pos:
-        print("Congratulations! You've escaped the maze!")
-        running = False
+        # Check if player has reached the exit with the key
+        if tuple(player_pos) == exit_pos:
+            print("Congratulations! You've escaped the maze!")
+            running = False
+
+        # Check if enemy has caught the player
+        if player_pos == enemy.pos:
+            print("Game Over! The enemy caught you.")
+            game_over = True
+
+        # Randomly spawn shotgun and ammo
+        if not has_shotgun and random.random() < 0.001:  # Adjust probability as needed
+            shotgun_pos = (
+                random.randint(0, GRID_WIDTH - 1),
+                random.randint(0, GRID_HEIGHT - 1),
+            )
+            if maze[shotgun_pos[1]][shotgun_pos[0]] == 1 and shotgun_pos != tuple(
+                player_pos
+            ):
+                has_shotgun = True
+                shotgun_ammo += 3
+                print("You found a shotgun with 3 ammo!")
 
     # Clear the screen
     screen.fill(BLACK)
@@ -178,17 +259,12 @@ while running:
         (player_pos[0] * CELL_SIZE, player_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE),
     )
 
-    # Draw the key if it's visible and not collected
+    # Draw the enemy if it's visible
     if (
-        not has_key
-        and max(abs(key_pos[0] - player_pos[0]), abs(key_pos[1] - player_pos[1]))
+        max(abs(enemy.pos[0] - player_pos[0]), abs(enemy.pos[1] - player_pos[1]))
         <= visibility_range
     ):
-        pygame.draw.rect(
-            screen,
-            YELLOW,
-            (key_pos[0] * CELL_SIZE, key_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE),
-        )
+        enemy.draw(screen)
 
     # Draw the exit if it's visible
     if (
