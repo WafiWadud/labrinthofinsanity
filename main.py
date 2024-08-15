@@ -7,9 +7,9 @@ pygame.init()
 
 # Constants
 WIDTH, HEIGHT = 800, 600
-CELL_SIZE = 20
-GRID_WIDTH = (WIDTH // CELL_SIZE) - 1
-GRID_HEIGHT = (HEIGHT // CELL_SIZE) - 1
+CELL_SIZE = 15
+GRID_WIDTH = WIDTH // CELL_SIZE - 1
+GRID_HEIGHT = HEIGHT // CELL_SIZE - 1
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -170,8 +170,8 @@ shotgun_ammo = 5
 
 # Enemy
 enemy = Enemy(
-    exit_pos[0] - random.randint(1, 5) + random.randint(1, GRID_WIDTH - 1),
-    exit_pos[1] - random.randint(1, 5) + random.randint(1, GRID_HEIGHT - 1),
+    exit_pos[0] - random.randint(1, 5) + random.randint(1, GRID_WIDTH - 2),
+    exit_pos[1] - random.randint(1, 5) + random.randint(1, GRID_HEIGHT - 2),
 )
 
 # Game loop
